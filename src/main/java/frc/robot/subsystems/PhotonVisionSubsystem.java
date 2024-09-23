@@ -12,6 +12,7 @@ import org.photonvision.targeting.PhotonPipelineResult;
 import org.photonvision.targeting.PhotonTrackedTarget;
 import org.photonvision.targeting.proto.PhotonPipelineResultProto;
 
+import edu.wpi.first.apriltag.AprilTagFieldLayout;
 import edu.wpi.first.math.controller.PIDController;
 import edu.wpi.first.math.geometry.Transform3d;
 import edu.wpi.first.networktables.DoubleArraySubscriber;
@@ -37,11 +38,20 @@ public class PhotonVisionSubsystem extends SubsystemBase {
   private PhotonTrackedTarget target;
   private int target_ID;
 
+  private PhotonPoseEstimator pose;
+  private AprilTagFieldLayout field;
+
   
 
   
   public PhotonVisionSubsystem() {
     photonCamera = new PhotonCamera("Logitech,_Inc._Webcam_C270");
+
+    pose = new PhotonPoseEstimator(null, null, getTargetPose());
+
+    field = new AprilTagFieldLayout(null, xPidOutPut, target_ID);
+
+
 
 
     xPidController = new PIDController(PhotonvisionConstants.xPid_Kp, PhotonvisionConstants.xPid_Ki, PhotonvisionConstants.xPid_Kd);
@@ -85,7 +95,7 @@ public class PhotonVisionSubsystem extends SubsystemBase {
       double botXValue = getTargetPose().getX();
       double botYValue = getTargetPose().getY();
       double botZValue = -target.getYaw();
- //     double botZValue = Math.toDegrees(target.getBestCameraToTarget().getRotation().getAngle());
+ //   double botZValue = Math.toDegrees(target.getBestCameraToTarget().getRotation().getAngle());
       target_ID = target.getFiducialId();
       SmartDashboard.putNumber("Photon/TargetID", getTargetID());
       SmartDashboard.putNumber("Photon/botXValue", botXValue);
