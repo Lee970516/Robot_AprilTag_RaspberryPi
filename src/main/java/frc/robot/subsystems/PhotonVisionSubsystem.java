@@ -7,12 +7,14 @@ package frc.robot.subsystems;
 import org.photonvision.PhotonCamera;
 import org.photonvision.PhotonPoseEstimator;
 import org.photonvision.PhotonVersion;
+import org.photonvision.PhotonPoseEstimator.PoseStrategy;
 import org.photonvision.proto.Photon.ProtobufPhotonTrackedTarget;
 import org.photonvision.targeting.PhotonPipelineResult;
 import org.photonvision.targeting.PhotonTrackedTarget;
 import org.photonvision.targeting.proto.PhotonPipelineResultProto;
 
 import edu.wpi.first.apriltag.AprilTagFieldLayout;
+import edu.wpi.first.apriltag.AprilTagFields;
 import edu.wpi.first.math.controller.PIDController;
 import edu.wpi.first.math.geometry.Transform3d;
 import edu.wpi.first.networktables.DoubleArraySubscriber;
@@ -40,6 +42,7 @@ public class PhotonVisionSubsystem extends SubsystemBase {
 
   private PhotonPoseEstimator pose;
   private AprilTagFieldLayout field;
+  private PoseStrategy strategy;
 
   
 
@@ -47,9 +50,12 @@ public class PhotonVisionSubsystem extends SubsystemBase {
   public PhotonVisionSubsystem() {
     photonCamera = new PhotonCamera("Logitech,_Inc._Webcam_C270");
 
-    pose = new PhotonPoseEstimator(null, null, getTargetPose());
+    pose = new PhotonPoseEstimator(field, strategy, getTargetPose());
 
-    field = new AprilTagFieldLayout(null, xPidOutPut, target_ID);
+    field = AprilTagFields.k2024Crescendo.loadAprilTagLayoutField();
+
+    strategy = PoseStrategy.AVERAGE_BEST_TARGETS;
+
 
 
 
