@@ -2,6 +2,11 @@ package frc.robot.subsystems;
 
 import java.util.Optional;
 
+import org.photonvision.EstimatedRobotPose;
+import org.photonvision.PhotonCamera;
+import org.photonvision.PhotonPoseEstimator;
+import org.photonvision.PhotonPoseEstimator.PoseStrategy;
+
 import com.ctre.phoenix6.configs.Pigeon2Configuration;
 import com.ctre.phoenix6.hardware.Pigeon2;
 import com.ctre.phoenix6.mechanisms.swerve.SwerveModuleConstants;
@@ -11,7 +16,12 @@ import com.pathplanner.lib.util.PIDConstants;
 import com.pathplanner.lib.util.PathPlannerLogging;
 import com.pathplanner.lib.util.ReplanningConfig;
 
+import edu.wpi.first.apriltag.AprilTagFieldLayout;
+import edu.wpi.first.apriltag.AprilTagFields;
 import edu.wpi.first.math.geometry.Pose2d;
+import edu.wpi.first.math.geometry.Rotation3d;
+import edu.wpi.first.math.geometry.Transform3d;
+import edu.wpi.first.math.geometry.Translation3d;
 import edu.wpi.first.math.kinematics.ChassisSpeeds;
 import edu.wpi.first.math.kinematics.SwerveDriveKinematics;
 import edu.wpi.first.math.kinematics.SwerveDriveOdometry;
@@ -22,6 +32,7 @@ import edu.wpi.first.wpilibj.DriverStation.Alliance;
 import edu.wpi.first.wpilibj.smartdashboard.Field2d;
 import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import edu.wpi.first.wpilibj2.command.SubsystemBase;
+import frc.robot.Constants;
 import frc.robot.Constants.SwerveConstants;
 
 public class SwerveSubsystem extends SubsystemBase {
@@ -36,6 +47,14 @@ public class SwerveSubsystem extends SubsystemBase {
     private final SwerveDriveOdometry odometry;
 
     private final Field2d field;
+
+    private final PhotonCamera camera;
+
+    private final AprilTagFieldLayout fieldLayout;
+
+    private final Transform3d robotToCamera;
+
+    private final PhotonPoseEstimator poseEstimator;
     /**
      * 
      */
@@ -75,6 +94,16 @@ public class SwerveSubsystem extends SubsystemBase {
         gyro.getConfigurator().apply(gyroConfig);
         resetGyro();
         odometry = new SwerveDriveOdometry(SwerveConstants.swervKinematics, gyro.getRotation2d(), getModulePosition());
+
+//------------------------------------------------------------------------------------------------------------------------------------------
+        camera = new PhotonCamera(getName());
+        fieldLayout = AprilTagFields.k2024Crescendo.loadAprilTagLayoutField();
+        robotToCamera = new Transform3d(new Translation3d(0, 0, 0), new Rotation3d(0, 0, 0));
+        poseEstimator = new PhotonPoseEstimator(fieldLayout, PoseStrategy.AVERAGE_BEST_TARGETS, camera, robotToCamera);
+
+
+
+//-------------------------------------------------------------------------------------------------------------------------------------------
         AutoBuilder.configureHolonomic(
             this::getPose, 
             this::setPose, 
@@ -106,6 +135,7 @@ public class SwerveSubsystem extends SubsystemBase {
     @Override
     public void periodic() {
         odometry.update(gyro.getRotation2d(), getModulePosition());
+        
         field.setRobotPose(odometry.getPoseMeters());
         // SmartDashboard.putNumber("leftFrontDrivePosition", leftFront.getDrivePosition());
         // SmartDashboard.putNumber("leftFrontturningPosition", leftFront.getTurningPosition());
@@ -115,10 +145,12 @@ public class SwerveSubsystem extends SubsystemBase {
         // SmartDashboard.putNumber("leftBackVelocity", leftBack.getDriveVelocity());
         // SmartDashboard.putNumber("rightFrontDrivePosition", rightFront.getDrivePosition());
         // SmartDashboard.putNumber("rightFrontturningPosition", rightFront.getTurningPosition());
-        // SmartDashboard.putNumber("rightFrontVelocity", rightFront.getDriveVelocity());
-        SmartDashboard.putNumber("rightBackDrivePosition", rightBack.getDrivePosition());
+        SmartDashboard.putNumber("Swerve/rightFrontVelocity", rightFront.getDriveVelocity());
+        SmartDashboard.putNumber("Swerve/rightBackDrivePosition", rightBack.getDrivePosition());
+        SmartDashboard.putNumber("Swerve/AngularVelocity", gyro.getAngularVelocityXDevice().getValueAsDouble());
         // SmartDashboard.putNumber("rightBackturningPosition", rightBack.getTurningPosition());
         // SmartDashboard.putNumber("rightBackVelocity", rightBack.getDriveVelocity());
+        SmartDashboard.putNumber("SwerveConstants/KModuleDistance", SwerveConstants.kModuleDistance);
     }
     
     public ChassisSpeeds getSpeeds() {
@@ -127,6 +159,9 @@ public class SwerveSubsystem extends SubsystemBase {
 
     public void drive(double xSpeed, double ySpeed, double zSpeed, boolean fieldOrient) {
         SwerveModuleState[] states = null;
+        xSpeed = xSpeed * SwerveConstants.maxDriveMotorSpeed;
+        ySpeed = ySpeed * SwerveConstants.maxDriveMotorSpeed;
+        zSpeed = zSpeed * Math.toRadians(32);
         if(fieldOrient) {
             states = SwerveConstants.swervKinematics.toSwerveModuleStates(ChassisSpeeds.fromFieldRelativeSpeeds(xSpeed, ySpeed, zSpeed, gyro.getRotation2d()));
         }else {
@@ -135,13 +170,18 @@ public class SwerveSubsystem extends SubsystemBase {
         setModuleState(states);
     }
 
+    public Optional<EstimatedRobotPose> getEstimatedRobotPose(Pose2d prevEsimatedPose) {
+        poseEstimator.setReferencePose(prevEsimatedPose);
+        return poseEstimator.update();
+    }
+
     public void setModuleStatesAuto(SwerveModuleState[] autoDesiredStates){
-    SwerveDriveKinematics.desaturateWheelSpeeds(autoDesiredStates, SwerveConstants.maxDriveMotorSpeed);
-    leftFront.setDesiredState_Auto(autoDesiredStates[0]);
-    rightFront.setDesiredState_Auto(autoDesiredStates[1]);
-    leftBack.setDesiredState_Auto(autoDesiredStates[2]);
-    rightBack.setDesiredState_Auto(autoDesiredStates[3]);
-  }
+        SwerveDriveKinematics.desaturateWheelSpeeds(autoDesiredStates, SwerveConstants.maxDriveMotorSpeed);
+        leftFront.setDesiredState_Auto(autoDesiredStates[0]);
+        rightFront.setDesiredState_Auto(autoDesiredStates[1]);
+        leftBack.setDesiredState_Auto(autoDesiredStates[2]);
+        rightBack.setDesiredState_Auto(autoDesiredStates[3]);
+    }
     // Auto Drive
     public void driveAuto(ChassisSpeeds RobotSpeeds){
         ChassisSpeeds targetSpeeds = ChassisSpeeds.discretize(RobotSpeeds, 0.01);
@@ -172,7 +212,7 @@ public class SwerveSubsystem extends SubsystemBase {
         };
     }
     public void setModuleState(SwerveModuleState[] desiredState) {
-        SwerveDriveKinematics.desaturateWheelSpeeds(desiredState,1);
+        SwerveDriveKinematics.desaturateWheelSpeeds(desiredState, SwerveConstants.maxDriveMotorSpeed);
         leftFront.setState(desiredState[0]);
         rightFront.setState(desiredState[1]);
         leftBack.setState(desiredState[2]);
